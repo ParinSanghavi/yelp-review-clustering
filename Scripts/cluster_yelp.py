@@ -279,7 +279,6 @@ def create_dataset_segregations(business=True):
                 fw.close()
             # Add the business into the category file
             fc=open('../BusinessReview/category_%s.txt'%cat,'a')
-            print i,st    
             fc.write(yb.business_id+'\r\n')
             fc.close()
     #Save the data of cities, businesses, states and categories as pickles for future use/runs
