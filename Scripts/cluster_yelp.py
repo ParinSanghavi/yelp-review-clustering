@@ -26,13 +26,16 @@ import matplotlib.cm as cm
 #          Dharmendrasinh Vaghela (djvaghel@ncsu.edu)#                                  
 ######################################################
 
-
+#Global Porter Stemmer Object
 stemmer=nltk.PorterStemmer()
 
+# Read and store the list of nouns in memory
+# Noun list obtained by wordnet all noun synsets
 nounsfile=open('nouns.pickle','r')
 nouns=pickle.load(nounsfile)
 nounsfile.close()
 
+#Load the data about cities, businesses, categories, states and provide the listing of trained model
 cities=[]
 categories=[]
 businesses=[]
@@ -69,6 +72,9 @@ except:
     print "Category data not loaded"
 
 def refresh_trained():
+    '''
+        Updates the global variable trained to list all trained models
+    '''
     if not os.path.exists('../Models/'):
         os.mkdir('../Models')
     global trained
@@ -77,23 +83,32 @@ def refresh_trained():
 refresh_trained()
 
 class Cluster(object):
+    '''
+        Represents a Cluster which can contain multiple clusters as its children.
+        A tree like data structure
+    '''
     
     def __init__(self):
-        self.number=-1
-        self.label=""
-        self.score=0.0
-        self.leaf=True
-        self.children={}
-        self.token_count=0.0
-        self.label_frequency=0.0
-        self.sentences_count=0.0
-        self.total_sentences=0.0
-        self.threshold=1.0
-        self.level=0
-        self.files=[]
-        self.root=False
+        self.number=-1              #Cluster Number
+        self.label=""               #Cluster Label
+        self.score=0.0              #cluster Score  
+        self.leaf=True              #Is Leaf Node 
+        self.children={}            #A Dictionary of child clusters 
+        self.token_count=0.0        #No. of tokens in the cluster
+        self.label_frequency=0.0    #Label Count in the Cluster
+        self.sentences_count=0.0    #Total number of sentence fragments in the cluster
+        self.total_sentences=0.0    #Total number of sentences in the dataset
+        self.threshold=1.0          #Threshold at which cluster was formed
+        self.level=0                #Level of the threshold; 0 indicates Leaf node
+        self.files=[]               #The file names in which cluster data is distributed
+        self.root=False             #Is Root Node
 
     def get_labels_levelwise(self):
+        '''
+            Returns a list of list of labels at different levels in the cluster tree
+            Each index of the outer list represents the level at which the labels are present
+            At each level, clusters are sorted in decreasing order of score
+        '''
         levels=[]
         for i in range (0,self.level):
             levels.append([])
@@ -111,6 +126,12 @@ class Cluster(object):
 
     @classmethod
     def build(cls,labels,thresholds=[0.3,0.2,0.15]):
+        '''
+            Given a list of label tuples of the form:
+                (Cluster#,Label,Label Count,Total Tokens,Sentence_Count,Total Sentences,Score)
+            Returns a cluster tree with the above labels as leaf nodes and merges the clusters 
+            in lower level for different thresholds provided as an argument.
+        '''
         thresholds.sort(reverse=True)
         d={}
         for label in labels:
@@ -164,6 +185,9 @@ class Cluster(object):
         return croot
 
     def __str__(self):
+        '''
+            Returns a string representation of the cluster
+        '''
         s="Cluster: %d\n"%self.number
         s=s+"Label : %s\n"%self.label
         s=s+"Score : %s\n"%self.score
@@ -172,6 +196,10 @@ class Cluster(object):
         return s
 
     def display(self,indent=""):
+        '''
+            Displays the complete cluster tree.
+            Children of a cluster are indicated by an indentation.
+        '''
         st=indent+"Cluster: %d Label: %s"%(self.number,self.label)
         print st
         if self.leaf:
@@ -181,6 +209,9 @@ class Cluster(object):
             child.display(indent=indent+" "*4) 
 
 def list_parameters():
+    '''
+        Prints a list of arguments that can be given as a parameter to list command
+    '''
     s='''
 1. business
 2. category
@@ -191,6 +222,17 @@ def list_parameters():
     print s
 
 def create_dataset_segregations(business=True):
+    '''
+        Builds the dataset.
+        If business is set to True, Reviews are segregated into businesses
+        Additionally, files for every city, state and category are populated with
+        business_id of the businesses they contain in files
+        <business_id>.json
+        city_<city_name>.txt
+        state_<state_name>.txt
+        category_<category_name>.txt
+    '''
+    #Segregate reviews into businesses
     if business:
         print "Segregating Reviews by Businesses"
         os.system('python divide_by_business.py')
@@ -206,33 +248,41 @@ def create_dataset_segregations(business=True):
         sys.stdout.write('\rProgress: %0.1f '%(float(i)*100/61184)+"%")
         sys.stdout.flush()
         yb=YelpBusiness.parse_json(b)
+        #Added a Yelp Business yb into businesses list with its name
         businesses.append((yb.business_id,yb.name))
+        #Normalize city name and create a file for the city if it does not exist
         c=yb.city.lower().replace('/','_').replace(' ','_')
         if c not in city:
             city[c]=True
             fw=open('../BusinessReview/city_%s.txt'%c,'w')
             fw.close()
+        #Append the business id into the city file
         fc=open('../BusinessReview/city_%s.txt'%c,'a')
         fc.write(yb.business_id+'\r\n')
         fc.close()
+        #Normalize state name and create a file for the state if it does not exist
         st=yb.state.lower()
         if st not in state:
             state[st]=True
             fw=open('../BusinessReview/state_%s.txt'%st,'w')
             fw.close()
+        #Append the business id into the state file
         fc=open('../BusinessReview/state_%s.txt'%st,'a')
         fc.write(yb.business_id+'\r\n')
         fc.close()
         for cat in yb.categories:
+            #Normalize category name and create a file for category if it does not exist
             cat=cat.lower().replace('/','_').replace(' ','_')
             if cat.lower() not in category:
                 category[cat.lower()]=True
                 fw=open('../BusinessReview/category_%s.txt'%cat,'w')
                 fw.close()
+            # Add the business into the category file
             fc=open('../BusinessReview/category_%s.txt'%cat,'a')
             print i,st    
             fc.write(yb.business_id+'\r\n')
             fc.close()
+    #Save the data of cities, businesses, states and categories as pickles for future use/runs
     fcity=open('cities.pickle','w')
     pickle.dump(city.keys(),fcity)
     fcity.close()
@@ -250,6 +300,14 @@ def create_dataset_segregations(business=True):
     
 
 def list_parameter_values(param):
+    '''
+        For valid params, list the valid values
+        'business':Businesses available;
+        'category':Categories available;
+        'city': City names available;
+        'state': State names available;
+        'models': Existing trained model names;
+    '''
     if param not in ['business','category','city','state','models']:
         print "Invalid category"
         return
@@ -258,16 +316,23 @@ def list_parameter_values(param):
         print param 
 
 def plot(business_id,model,clusters,cluster_tree):
+    '''
+        Scatter Plot of top 9 clusters reduced to 2 dimensions via PCA
+    '''
     labels=cluster_tree.get_labels_levelwise()
     #Plot level 0 top 9
     cluster_info={}
+    #Cluster numbers of top 9 clusters
     cluster_num=[x.number for x in labels[0][0:9]]
+    #Cluster labels of top 9 clusters
     label_names=[x.label for x in labels[0][0:9]]
     cluster_num.append(-1)
     label_names.append('Others')
-    
+    #Create am empty list of cluster_info keyed b cluster number -> a tuple of 2 empty lists
+    # First list for x-coordinate and second list for corresponding y co-ordinate
     for c in cluster_num:
         cluster_info[c]=([],[])
+    #Place datapoints in appropriate cluster lists
     for i in range(0,len(clusters)):
         if clusters[i] in cluster_num:
             key = clusters[i]
@@ -275,28 +340,43 @@ def plot(business_id,model,clusters,cluster_tree):
             key = -1
         cluster_info[key][0].append(model[i,0])
         cluster_info[key][1].append(model[i,1])
+    # List of colors
     colors=cm.rainbow(np.linspace(0,1,10))
     plots=[]
     fig=plt.figure()
+    #Perform scatter plots for top 9 clusters
     for i in range(0,len(colors[:-1])):
         plots.append(plt.scatter(cluster_info[cluster_num[i]][0],cluster_info[cluster_num[i]][1],color=colors[i],label=label_names[i]))
+    #Add legends,xlabel,ylabel and title
     plt.legend(plots,label_names[0:9])
     plt.xlabel("Principal Component 1")
     plt.ylabel("Principal Component 2")
     plt.title("Top 9 Clusters reduced to 2 dimensions")
+    #Save the image as a jpg file
     fig.savefig('../Models/%s/scatter.jpg'%business_id)
+    #Show the plot
     plt.show()    
    
  
 def is_noun(x):
+    '''
+        returns True if x is a noun else False
+    '''
     return x.lower().strip() in nouns
 
 def get_relative_similarity(a,b):
+    '''
+        Returns path similarity between two word a and b.
+        Used for merging two clusters
+    '''
     x=wn.synset("%s.n.01"%a)
     y=wn.synset("%s.n.01"%b)
     return x.path_similarity(y)
     
 def get_yelp_business(business_id):
+    ''' 
+        Returns a YelpBusiness object for a particular business_id
+    '''
     f=open('../Dataset/business.json')
     x=f.readline()
     while business_id not in x:
@@ -305,6 +385,9 @@ def get_yelp_business(business_id):
     return YelpBusiness.parse_json(x)
 
 def stem_tokens(tokens,stemmer):
+    '''
+        Performs stemming of tokens
+    '''
     stemmed=[]
     for token in tokens:
         stemmed.append(stemmer.stem(token))
@@ -312,17 +395,27 @@ def stem_tokens(tokens,stemmer):
     return stemmed
 
 def tokenize_and_stem(text):
+    '''
+        Tokenizes the text and performs stemming
+    '''
     tokens=nltk.word_tokenize(text)
+    #Alphabetical tokens only with word length greater than 3
     tokens = [w for w in tokens if w.isalpha() and len(w) > 3]
     stems=stem_tokens(tokens,stemmer)
     return stems
 
 def tokenize_only(text):
+    '''
+        Performs tokenization of text without stemming
+    '''
     tokens=nltk.word_tokenize(text)
     tokens = [w for w in tokens if w.isalpha() and len(stemmer.stem(w)) > 3]
     return tokens
 
 def get_vocab_mapping(dataset):
+    '''
+        Returns a Panda DataFrame of stemmed words mapped to one of the vocabulary words 
+    '''
     vocab=[]
     stemmed=[]
     for i in dataset.keys():
@@ -337,11 +430,21 @@ def get_vocab_mapping(dataset):
     return vocab_frame
 
 def get_tfidf_matrix(dataset):
+    '''
+        Generate a TF-IDF matrix i.e. Vector Space Model for the dataset (A list of fragmented sentences)
+        Stopwords are also removed in this step.
+        Returns a sparse matrix of TF-IDF values along with the feature names
+    '''
     vectorizer= TfidfVectorizer(tokenizer=tokenize_and_stem,stop_words="english",use_idf=True)
     model=vectorizer.fit_transform(dataset.values())
     return model,vectorizer.get_feature_names()
 
 def get_tfidf_matrix_lsa(dataset,dimension_size=100):
+    '''
+        Generate a TF-IDF matrix i.e. Vector Space Model for the dataset (A list of fragmented sentences)
+        Stopwords are also removed in this step.
+        Returns a sparse matrix of TF-IDF with dimensionality reduction (LSA) values along with the component names
+    '''
     vectorizer= TfidfVectorizer(tokenizer=tokenize_and_stem,stop_words="english",use_idf=True)
     model=vectorizer.fit_transform(dataset.values())
     features=vectorizer.get_feature_names()
@@ -351,11 +454,17 @@ def get_tfidf_matrix_lsa(dataset,dimension_size=100):
     return model_fitted,features 
 
 def train_k_means(tfidf,K):
+    '''
+        Perform K-means clustering with a cluster size of "K"
+    '''
     km=KMeans(n_clusters=K)
     km.fit(tfidf)
     return km
 
 def save_trained_model(business_id,obj,objname):
+    '''
+        Saves the obj under a particular business_id folder with name: objname.pickle
+    '''
     if not os.path.exists('../Models/'):
         os.mkdir('../Models')
     if not os.path.exists('../Models/%s'%business_id):
@@ -366,6 +475,10 @@ def save_trained_model(business_id,obj,objname):
     f.close()
 
 def segregate_by_cluster(business_id,K,dataset,cluster_list):
+    ''' 
+        From the dataset, create files with Cluster_<Cluster_num>.txt containing the 
+        sentence fragments that belong to the cluster: <cluster_num>
+    '''
     if not os.path.exists('../Models/'):
         os.mkdir('../Models')
     if not os.path.exists('../Models/%s'%business_id):
@@ -384,6 +497,10 @@ def segregate_by_cluster(business_id,K,dataset,cluster_list):
         f.close()
     
 def label_clusters(business_id,K,clusters):
+    '''
+        Label the clusters of a particular run specified by business_id 
+        as the most common noun in that cluster
+    '''
     base='../Models/%s/Clusters/'%business_id
     sentence_count=FreqDist(clusters)
     total_sentences=len(clusters)
@@ -410,6 +527,9 @@ def label_clusters(business_id,K,clusters):
     return labels
 
 def load_model(business_id):
+    '''
+        Returns dataset,kmeans_model,vector_space_model,plottable_model already pickled during the run
+    '''
     base='../Models/%s/'%business_id
     files=get_filenames(business_id)
     dataset,business_id=select(files)
@@ -436,6 +556,14 @@ def load_model(business_id):
     return dataset,km_trained,vector_space_model,plottable_model
 
 def group_similar_clusters(labels,threshold=0.3):
+    '''
+           Given a list of label tuples of the form:
+                (Cluster#,Label,Label Count,Total Tokens,Sentence_Count,Total Sentences,Score)
+           Returns a higher level list of labels in the similar form by merging clusters having
+           label similarities >= threshold
+           Utilizes a disjoint set implementation for grouping similar clusters
+           The label of the grouped cluster is same as the label of the child cluster with highest score 
+    '''
     K=len(labels)
     disjoint=[]
     for i in range(0,K):
@@ -480,6 +608,9 @@ def group_similar_clusters(labels,threshold=0.3):
 
 
 def load_labels(business_id):
+    '''
+        Loads labels and cluster_tree from the pickled version saved during analysis of clusters
+    '''
     base='../Models/%s/'%business_id
     labels_unmerged=None
     cluster_tree=None
@@ -500,7 +631,11 @@ def load_labels(business_id):
     cluster_tree=pickle.load(f)
     return labels_unmerged,cluster_tree 
 
-def pre_process(fname):
+def get_business_dataset(fname):
+    '''
+        Returns the dataset for a single business given by the fname
+        fname: full path of the file containing the reviews for that business
+    '''
     if not os.path.exists(fname):
         print 'File Not Found'
         return
@@ -511,10 +646,19 @@ def pre_process(fname):
     return dataset,business_id 
 
 def select(fname):
+    ''' 
+        Selects data as an intersection of businesses as indicated from the list fname
+        Returns the combined dataset along with format_id which is model name to be passed as parameter for
+        different functions like analyze and view
+    '''
     for name in fname:
         if not os.path.exists(name):
             print 'File Not Found',fname
             return
+    #X = Universal set containing all businesses
+    #Format if single business: business_id
+    #For all file names, get all businesses and perform intersection to get filtered set of businesses
+    #Format ID is used as Model Name
     x=set([y[0] for y in businesses])
     s=[]
     c=[]
@@ -563,12 +707,15 @@ def select(fname):
         i=i+1
         sys.stdout.write('\r Reading Business Reviews: %d/%d'%(i,total_businesses))
         sys.stdout.flush()
-        dataset_temp,business_id=pre_process(directory+"%s.json"%business.strip())
+        dataset_temp,business_id=get_business_dataset(directory+"%s.json"%business.strip())
         dataset.update(dataset_temp)
     print ""
     return dataset,format_id
 
 def get_filenames(format_id,directory="../BusinessReview/"):
+    '''
+        Parses the format_id or model name to return a list of file names for dataset creation
+    '''
     if "#" not in format_id:
         return [directory+business_id+".json"]
     x=format_id.split('@')
@@ -586,6 +733,9 @@ def get_filenames(format_id,directory="../BusinessReview/"):
     return files
 
 def train(business_id,dataset,num_of_clusters,lsa=False,lazy=False):
+    ''' 
+        Performs data selection and train.Saves the model as pickle
+    '''
     print "Finding K Clusters for Business ID: %s and K = %d"%(business_id,num_of_clusters)        
     print 'Performing Tokenization, Stemming and Stopword Removal followed by Conversion to Vector Space Model'
     if lsa:
@@ -607,6 +757,11 @@ def train(business_id,dataset,num_of_clusters,lsa=False,lazy=False):
     return km_trained,clusters,df
 
 def analyze(business_id,dataset,clusters,segregate=True):
+    ''' 
+        Analyze the cluster data.
+        Segregates the data points into cluster if segregate is set to True
+        Labels and Merges the cluster while assigning a score to every cluster.
+    '''
     base='../Models/%s/'%business_id
     if not os.path.exists('../Models/%s/'%business_id):
         print 'No training model found'   
@@ -627,6 +782,9 @@ def analyze(business_id,dataset,clusters,segregate=True):
     return cluster_tree
 
 def view(business_id):
+    '''
+        View the cluster and its analysis
+    '''
     labels,cluster_tree=load_labels(business_id)    
     if not labels:
         return
@@ -644,7 +802,7 @@ def view(business_id):
     plot(business_id,plm,clusters,cluster_tree)
     
     
-
+'''
 def main(fname,num_of_clusters):
     if not os.path.exists(fname):
         print 'File Not Found'
@@ -654,47 +812,34 @@ def main(fname,num_of_clusters):
     print business_id    
     business=get_yelp_business(business_id)
     dataset=business.update_review_data()
-
     vocab=get_vocab_mapping(dataset)
-
     vector_space_model,terms = get_tfidf_matrix(dataset)
-    
     save_trained_model(business_id,vector_space_model,'vsmodel')
- 
     km_trained = train_k_means(vector_space_model,num_of_clusters)
-    
     save_trained_model(business_id,km_trained,'kmeans')
-    
     clusters = km_trained.labels_.tolist()
-
     segregate_by_cluster(business_id,num_of_clusters,dataset,clusters)
-
     labels=label_clusters(business_id,num_of_clusters,clusters)         
-   
     save_trained_model(business_id,labels,"labels_level_0")
     merged,grouping = group_similar_clusters(labels,)
     labels=sorted(labels,key = lambda k: -k[6])
-
-
-
     print ("Cluster#","Label","Label Frequency","Total Tokens","Cluster Count","Total Sentences","Score")
-    
     for label in labels:
         print label
-
     merged,grouping = group_similar_clusters(labels,0.15)   
-
     save_trained_model(business_id,merged,"merged")
     save_trained_model(business_id,grouping,"groups")
     merged_sorted=   sorted(merged,key = lambda k: -k[6]) 
-    
     for grp in grouping:
         print grouping[grp]
-
     for label in merged_sorted:
         print label
+'''
 
 def show_usage():
+    ''' 
+        print Usage
+    '''
     usage=''' 
  HOW TO USE: 
  ##############################################################################################################################
@@ -745,7 +890,7 @@ def show_usage():
     print usage
 
 if __name__ == "__main__":
-    #options = train, analyze, view, all
+    #options = build, list, train, analyze, view, complete
     print "#########Yelp Review Clustering Tool#########"
     argc=len(sys.argv)
     if argc == 1:
@@ -822,6 +967,8 @@ if __name__ == "__main__":
                 print "Not Enough Data !!!"
         else:
             show_usage()
+    else:
+        show_usage()
            
 
     #main(sys.argv[1],sys.argv[2]) 
