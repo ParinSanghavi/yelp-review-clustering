@@ -21,7 +21,7 @@
 
 1. The dataset can be downloaded from here: http://www.yelp.com/dataset_challenge
 2. Unzip the dataset. Place the Dataset folder in the same location as the Scripts folder which is part of this repository
-3. The directory should look something like this...
+3. The prefix of the json files should be removed e.g. yelp_academic_dataset_business.json becomes business.json. The directory should look something like this...
 ```
 <location>
 ---Scripts/
